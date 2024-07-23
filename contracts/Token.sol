@@ -2414,10 +2414,18 @@ abstract contract ERC20Permit is ERC20, IERC20Permit, EIP712, Nonces {
         return _domainSeparatorV4();
     }
 }
+// Next Token Migration Interface if Upgraded in Future
+interface IMigrationToken{
+    function migrateOldToken(address user,uint amount) external;
+}
+
+// Holding Map
 struct HoldingMap {
     address wallet;
     uint256 amount;
 }
+
+// Dividend Pool
 struct Pool {
     uint256 totalAmount;
     uint256 timestamp;
@@ -2427,6 +2435,41 @@ struct Pool {
     mapping(address=>bool) isClaimed;
 }
 
+// Bridge Pool
+contract BridgePool is Ownable{
+    string public chain;
+    uint public chainId;
+    IERC20 public token;
+    address public tokenContract;
+    uint public totalSupply = 0;
+    constructor(string memory _chainName,uint _chainId,address _token,address bridgeEmitter)
+    Ownable(bridgeEmitter)
+    {
+        chain = _chainName;
+        chainId = _chainId;
+        tokenContract = _token;
+        token = IERC20(_token);
+    }
+
+    function swapIn(address to,uint value) public onlyOwner{
+        if(token.balanceOf(address(this)) >=  value){
+            token.transfer(to, value);
+            totalSupply -= value;
+        }else{
+            revert("Not enough tokens here!");
+        }
+    }
+
+    function swapOut(uint amount) public {
+        if(_msgSender() != tokenContract) revert("Only Token Contract!");
+
+        totalSupply += amount;
+
+        if(token.balanceOf(address(this)) < totalSupply) revert("Not enough tokens here!");
+    }
+
+}
+// DEAR Token Contract
 contract DEARToken is
     Ownable,
     ERC20,
@@ -2436,16 +2479,19 @@ contract DEARToken is
     IERC20 usdt = IERC20(0xd8BB248996C02f8DcCD07A2c946D679f67FFc440);
     uint pooledTokens = 0;
 
+    // Next Migration Token
+    IMigrationToken mToken = IMigrationToken(address(0));
+    
     // Stakes in percentage total must be 100;
     address profitPool = address(0);
     uint256 foundersShare = 10;
     uint256 operationShare = 20;
     uint256 comunityShare = 50;
     uint256 marketingShare = 20;
-    address public founderWallet = 0x80325349E351dbB3973F6C86eE195df4C0039F0E;
-    address public communityWallet = 0x80325349E351dbB3973F6C86eE195df4C0039F0E;
-    address public marketingWallet = 0x80325349E351dbB3973F6C86eE195df4C0039F0E;
-    address public operationWallet = 0x80325349E351dbB3973F6C86eE195df4C0039F0E;
+    address immutable public founderWallet = 0x80325349E351dbB3973F6C86eE195df4C0039F0E;
+    address immutable public communityWallet = 0x80325349E351dbB3973F6C86eE195df4C0039F0E;
+    address immutable public marketingWallet = 0x80325349E351dbB3973F6C86eE195df4C0039F0E;
+    address immutable public operationWallet = 0x80325349E351dbB3973F6C86eE195df4C0039F0E;
     // uint _totalSupply = 0;
 
     // Pools Data
@@ -2458,6 +2504,10 @@ contract DEARToken is
     mapping(address => uint256) holdingMapIndexofUser_;
     mapping(address => bool) userExistsInHoldingMap_;
     address[] public holders;
+
+    // Brdge Pool (ChainID=>bool) (ChainID=>PoolAddress)
+    mapping(uint=>bool) public isChainExists;
+    mapping(uint=>address) public bridgePoolAddress;
 
     constructor(
         string memory name,
@@ -2595,5 +2645,43 @@ contract DEARToken is
     function _calculateReward(uint poolId,uint index) private view returns(uint){
         Pool storage p = pools[poolId];
         return (p.holding[index].amount/p.circulatingSupply) * p.totalAmount;
+    }
+
+    // Migration Functions
+    function migrate() public {
+        address user = _msgSender();
+        uint balance_ = balanceOf(user);
+        super._burn(user, balance_);
+        mToken.migrateOldToken(user, balance_);
+    }
+
+    function setMigrationToken(address token_) public onlyOwner{
+        mToken = IMigrationToken(token_);
+    }
+
+    // Bridge Functions
+    function swapToChain(uint chainId,uint amount) public{
+        if(!isChainExists[chainId]) revert ("Chain not enabled!");
+        address poolAddress = bridgePoolAddress[chainId];
+        BridgePool pool = BridgePool(poolAddress);
+        super._transfer(_msgSender(), poolAddress, amount);
+        pool.swapOut(amount);
+    }
+
+    function addAChain(uint chainId,string memory chainName, address emitter) public onlyOwner{
+        if(isChainExists[chainId]) revert ("Chain already enabled!");
+        isChainExists[chainId] = true;
+        BridgePool pool = new BridgePool(chainName,chainId,address(this),emitter);
+        bridgePoolAddress[chainId] = address(pool);
+    }
+
+    function disableAChain(uint chainId) public onlyOwner{
+        if(!isChainExists[chainId]) revert ("Chain already disabled!");
+        isChainExists[chainId] = false;
+    }
+
+    function enableAChain(uint chainId) public onlyOwner{
+        if(isChainExists[chainId]) revert ("Chain already enabled!");
+        isChainExists[chainId] = true;
     }
 }
