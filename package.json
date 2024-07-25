@@ -1,0 +1,18 @@
+{
+  "name": "dear-token",
+  "description": "A Decentralized Ecommerce Protocol which connects entire ecommerce market into single contract. Making it accessible for everyone to shop or create a shop. Sell through out the network.",
+  "version": "1.0.0",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "@truffle/hdwallet-provider": "^2.1.15",
+    "dotenv": "^16.4.5"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
