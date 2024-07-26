@@ -1,9 +1,9 @@
-var Token = artifacts.require("DEARToken");
-var usdt = artifacts.require("USDT");
+// var Token = artifacts.require("DEARToken");
+var Vesting = artifacts.require("VestingContract");
 
 module.exports = function(deployer) {
   // deployment steps
-  deployer.deploy(usdt,"USDT Token","USDT","100000000000000000000000000000").then(()=>{
-    return deployer.deploy(Token,"DEAR Token","DEAR","100000000000000000000000000000",usdt.address);
-  })
+  deployer.deploy(Vesting)
+  // deployer.deploy(Token,"DEAR Token","DEAR","100000000000000000000000000000",usdt.address);
+
 };
